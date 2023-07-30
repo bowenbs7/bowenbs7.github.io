@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<!-- Import JavaScript libraries. -->
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.min.js"></script>
+<body onload="init()">
+
+<!-- Necessary HTML elements. -->
+<div id="button-div">
+    <button type="button" id="previous">Previous Slide</button>
+    <input type="date" id="begin-date" required>
+    <input type="date" id="end-date" required>
+    <select id="platform"></select>
+    <select id="region"></select>
+    <button type="button" id="filter">Filter Data</button>
+    <button type="button" id="reset">Reset Filter</button>
+    <button type="button" id="next">Next Slide</button>
+</div>
+
+<svg></svg>
+<p id="testing"></p>
+<div id="tooltip-div"></div>
+
+<script>
+    async function init() {
+        // Load in main dataset.
+        const data = await d3.csv("https://raw.githubusercontent.com/bowenbs7/narrativeviz-cs416/main/zelda_botw_totk_speedruns.csv");
+
+        // NOTE: SVG dimensions.
+        var svg_width = 1380, svg_height = 920;
+        var margin = {top: 20, bottom: 100, left: 80, right: 500};
+        // Define sizing of svg using predefined variables.
+        d3.select("svg")
+            .attr("width", svg_width)
+            .attr("height", svg_height);
+        var width = svg_width - margin.left - margin.right,
+            height = svg_height - margin.top - margin.bottom;
+
+        // Define functions to convert Excel datetime to standard datetime.
+        function Excel_date(Excel_date) {
+            return new Date(Math.floor(Excel_date - 25568) * 86400 * 1000);
+        }
+        function Excel_date_num(date_value) {
+            var zero_date = new Date("1899-12-30");
+            return (date_value.getTime() - zero_date.getTime()) / (1000 * 3600 * 24);
+        }
+        function Excel_time(Excel_time) {
+            var hours = Math.floor(Excel_time / 3600);
+            var minutes = Math.floor((Excel_time - hours * 3600) / 60);
+            var seconds = Math.floor(Excel_time - hours * 3600 - minutes * 60);
+            if (minutes < 10) {
+                minutes = "0" + minutes;
+            }
+            if (seconds < 10) {
+                seconds = "0" + seconds;
+            }
+            return hours + ":" + minutes + ":" + seconds;
+        }
+        
+        // Define slide number and slide functions.
+        var slide = 1;
+        function button_check() {
+            if (slide <= 1) {
+                slide = 1;
+                document.getElementById("previous").style.visibility = "hidden";
+            } else {
+                document.getElementById("previous").style.visibility = "visible";
+            }
+            if (slide >= 3) {
+                slide = 3;
+                document.getElementById("next").style.visibility = "hidden";
+            } else {
+                document.getElementById("next").style.visibility = "visible";
+            }
+        }
+        function previous_slide() {
+            slide = slide - 1;
+            button_check();
+            filter_settings(slide);
+            if (slide == 3) {
+                both_chart();
+            } else if (slide == 2) {
+                totk_chart(filter_data(true, "totk", slide));
+            } else {
+                botw_chart(filter_data(true, "botw", slide));
+            }
+        }
+        function next_slide() {
+            slide = slide + 1;
+            button_check();
+            filter_settings(slide);
+            if (slide == 3) {
+                both_chart();
+            } else if (slide == 2) {
+                totk_chart(filter_data(true, "totk", slide));
+            } else {
+                botw_chart(filter_data(true, "botw", slide));
+            }
+        }
+        
+        // Define function to set filters.
+        function filter_settings(slide_num) {
+            var begin_date_settings = document.getElementById("begin-date");
+            var end_date_settings =  document.getElementById("end-date");
+            var platform_select = document.querySelector("#platform");
+            while (platform_select.options.length > 0) {
+                platform_select.remove(0);
+            }
+            var region_select = document.querySelector("#region");
+            while (region_select.options.length > 0) {
+                region_select.remove(0);
+            }
+            if (slide_num == 1) {
+                begin_date_settings.value = "2017-03-03";
+                begin_date_settings.setAttribute("min", "2017-03-01");
+                begin_date_settings.setAttribute("max", "2023-07-31");
+                end_date_settings.value = "2023-07-22";
+                end_date_settings.setAttribute("min", "2017-03-01");
+                end_date_settings.setAttribute("max", "2023-07-31");
+                platform_select.add(new Option("All Platforms", "all"));
+                platform_select.add(new Option("Nintendo Switch", "switch"));
+                platform_select.add(new Option("Nintendo Wii U", "wiiu"));
+                region_select.add(new Option("All Regions", "all"));
+                region_select.add(new Option("North America", "na"));
+                region_select.add(new Option("Europe", "eu"));
+                region_select.add(new Option("Japan", "jp"));
+                begin_date_settings.style.visibility = "visible";
+                end_date_settings.style.visibility = "visible";
+                platform_select.style.visibility = "visible";
+                region_select.style.visibility = "visible";
+                document.getElementById("filter").style.visibility = "visible";
+                document.getElementById("reset").style.visibility = "visible";
+            } else if (slide_num == 2) {
+                begin_date_settings.value = "2023-05-18";
+                begin_date_settings.setAttribute("min", "2023-05-15");
+                begin_date_settings.setAttribute("max", "2023-07-31");
+                end_date_settings.value = "2023-07-24";
+                end_date_settings.setAttribute("min", "2023-05-15");
+                end_date_settings.setAttribute("max", "2023-07-31");
+                platform_select.add(new Option("Switch Only", "all"));
+                region_select.add(new Option("All Regions", "all"));
+                region_select.add(new Option("North America", "na"));
+                region_select.add(new Option("Europe", "eu"));
+                region_select.add(new Option("Japan", "jp"));
+                begin_date_settings.style.visibility = "visible";
+                end_date_settings.style.visibility = "visible";
+                platform_select.style.visibility = "visible";
+                region_select.style.visibility = "visible";
+                document.getElementById("filter").style.visibility = "visible";
+                document.getElementById("reset").style.visibility = "visible";
+            } else if (slide_num == 3) {
+                begin_date_settings.value = "";
+                end_date_settings.value = "";
+                begin_date_settings.style.visibility = "hidden";
+                end_date_settings.style.visibility = "hidden";
+                platform_select.style.visibility = "hidden";
+                region_select.style.visibility = "hidden";
+                document.getElementById("filter").style.visibility = "hidden";
+                document.getElementById("reset").style.visibility = "hidden";
+            }
+        }
+        function filter_data(use_defaults = true, data_set = "botw", slide_num) {
+            var filtering;
+            if (data_set == "totk") {
+                filtering = data.filter(function(d) { return d.game_id == "v1px9276"; });
+            } else if (data_set == "botw") {
+                filtering = data.filter(function(d) { return d.game_id == "76rqjqd8" && d.primary_runtime <= 10000; });
+            }
+            if (use_defaults) {
+                return filtering;
+            }
+            var platform = document.querySelector("#platform").value;
+            if (platform == "switch") {
+                filtering = filtering.filter(function(d) { return d.platform_id == "7m6ylw9p"; });
+            } else if (platform == "wiiu") {
+                filtering = filtering.filter(function(d) { return d.platform_id == "8gejn93d"; });
+            }
+            var region = document.querySelector("#region").value;
+            if (region == "na") {
+                filtering = filtering.filter(function(d) { return d.region_id == "pr184lqn"; });
+            } else if (region == "eu") {
+                filtering = filtering.filter(function(d) { return d.region_id == "e6lxy1dz"; });
+            } else if (region == "jp") {
+                filtering = filtering.filter(function(d) { return d.region_id == "o316x197"; });
+            }
+            var begin_date = new Date(document.getElementById("begin-date").value);
+            var end_date = new Date(document.getElementById("end-date").value);
+            if (document.getElementById("begin-date").value == "" || document.getElementById("end-date").value == "" || (begin_date > end_date)) {
+                if (slide_num == 1) {
+                    document.getElementById("begin-date").value = "2017-03-03";
+                    document.getElementById("end-date").value = "2023-07-22";
+                } else if (slide_num == 2) {
+                    document.getElementById("begin-date").value = "2023-05-18";
+                    document.getElementById("end-date").value = "2023-07-24";
+                }
+            } else {
+                filtering = filtering.filter(function(d) { return d.date_completed >= Excel_date_num(begin_date) && d.date_completed <= Excel_date_num(end_date); });
+            }
+            return filtering;
+        }
+        function filter_chart(slide_num) {
+            if (slide_num == 1) {
+                botw_chart(filter_data(false, "botw", slide_num));
+            } else if (slide_num == 2) {
+                totk_chart(filter_data(false, "totk", slide_num));
+            }
+        }
+        function reset_filters(slide_num) {
+            filter_settings(slide);
+            if (slide_num == 1) {
+                botw_chart(filter_data(true, "botw", slide_num));
+            } else if (slide_num == 2) {
+                totk_chart(filter_data(true, "totk", slide_num));
+            }
+        }
+
+        function botw_chart(input_data) {
+            // Clear svg of all elements.
+            var svg = d3.select("svg");
+            svg.selectAll("*").remove();
+
+            // Set the x-axis scale.
+            var input_dates = d3.extent(input_data, d => d.date_completed);
+            var date_format = [Excel_date(input_dates[0]), Excel_date(input_dates[1])];
+            var x_scale = d3.scaleLinear()
+                .domain(input_dates)
+                .range([0, width]);
+            var x_axis_scale = d3.scaleTime()
+                .domain(date_format)
+                .range([0, 1]);
+            
+            // Define the x-axis.
+            var x_axis = d3.axisBottom(x_axis_scale)
+                .tickFormat(d3.timeFormat("%b-%d-%Y"))
+                .ticks(25);
+            svg.append("g")
+                .attr("id", "x-axis")
+                .attr("transform", "translate("+margin.left+","+(svg_height - margin.bottom)+")")
+                .call(x_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-0.8em")
+                .attr("dy", ".15em")
+                .style("font-size", "12")
+                .attr("transform", "rotate(-55)");
+            x_axis_scale.range([0, width]);
+            svg.select("#x-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(x_axis);
+            
+            // Set the y-axis scale.
+            var input_times = d3.extent(input_data, d => d.primary_runtime);
+            var y_scale = d3.scaleLog()
+                .domain(input_times)
+                .range([height, height - 1]);
+            
+            // Define the y-axis.
+            var y_axis = d3.axisLeft(y_scale)
+                .tickFormat(d3.format(",.2r"));
+            svg.append("g")
+                .attr("id", "y-axis")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .call(y_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("font-size", "11.5");
+            y_scale.range([height, 0]);
+            svg.select("#y-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(y_axis);
+
+            // Define the x&y-axis labels.
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", margin.left + (width / 2))
+                .attr("y", svg_height - (margin.bottom - 90))
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Date of Completed Speedrun");
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", -(margin.top + (height / 2)))
+                .attr("y", margin.left - 50)
+                .attr("transform", "rotate(-90)")
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Time to Completion (in Seconds)");
+            svg.selectAll(".axis-label")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .attr("opacity", "1");
+            
+            // Define the tooltip and associated functions.
+            var tooltip = d3.select("#tooltip-div");
+            tooltip.style("opacity", 0)
+                .style("position", "absolute")
+                .style("background-color", "white")
+                .style("border", "solid")
+                .style("border-width", "1px")
+                .style("border-radius", "5px")
+                .style("padding", "10px");
+            var mouseover = function(d) {
+                var selected_date = Excel_date(d.date_completed).toLocaleDateString("en-US", {year: 'numeric', month: 'short', day: 'numeric'});
+                tooltip.style("opacity", 1)
+                    .html("Verified run completed in:<br>" + Excel_time(d.primary_runtime) + " on " + selected_date)
+                    .style("left", (d3.mouse(this)[0] + margin.left + 20) + "px")
+                    .style("top", (d3.mouse(this)[1] + margin.top - 20) + "px");
+                d3.select(this)
+                    .style("fill", d3.color("gold"))
+                    .style("stroke", d3.color("black"));
+            }
+            var mouseleave = function(d) {
+                tooltip.style("opacity", 0)
+                    .html("")
+                    .style("left", "auto")
+                    .style("top", "auto");
+                d3.select(this)
+                    .style("fill", d3.color("lightblue"))
+                    .style("stroke", d3.color("darkcyan"));
+            }
+            
+            // Define the points.
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .selectAll().data(input_data)
+                .enter().append("circle")
+                .classed("botw-points", true)
+                .attr("cx", 0)
+                .attr("cy", height)
+                .attr("r", 5)
+                .style("fill", d3.color("lightblue"))
+                .style("stroke", d3.color("darkcyan"))
+                .on("mouseover", mouseover)
+                .on("mousemove", mouseover)
+                .on("mouseleave", mouseleave);
+            svg.selectAll(".botw-points")
+                .transition()
+                .delay(100)
+                .duration(1000)
+                .attr("cx", function(d, i) { return x_scale(d.date_completed); })
+                .attr("cy", function(d, i) { return y_scale(d.primary_runtime); });
+            
+            // Add the annotations.
+            var elbow_callout = d3.annotationCustomType(d3.annotationCalloutElbow, {
+                "connector": {"type": "elbow"},
+                "note": {
+                    "lineType": "vertical",
+                    "align": "middle"
+                }
+            });
+            var threshold_callout = d3.annotationCustomType(d3.annotationXYThreshold, {
+                "connector": {"type": "elbow"},
+                "note": {
+                    "lineType": "horizontal",
+                    "align": "left"
+                }
+            });
+            var anno_values = [
+                ["42797", "8567"],
+                ["45051", "1422"],
+                ["43831", input_times[0]],
+            ];
+            var anno_check = input_data.filter(function(d) { return d.date_completed == anno_values[0][0] && d.primary_runtime == anno_values[0][1]; });
+            if (anno_check.length != 0) {
+                var anno_point = d3.annotation()
+                    .type(elbow_callout)
+                    .annotations([{
+                        note: {
+                            label: "Selected point",
+                            title: "Point 1"
+                        },
+                        data: {
+                            date_completed: anno_values[0][0],
+                            primary_runtime: anno_values[0][1]
+                        },
+                        dx: 50,
+                        dy: 50
+                    }])
+                    .accessors({
+                        x: d => x_scale(d.date_completed),
+                        y: d => y_scale(d.primary_runtime)
+                    })
+                    .accessorsInverse({
+                        date: d => x_scale.invert(d.x),
+                        close: d => y_scale.invert(d.y)
+                    });
+                svg.append("g")
+                    .attr("transform", "translate("+margin.left+","+margin.top+")")
+                    .classed("botw-anno", true)
+                    .call(anno_point)
+                    .attr("opacity", "0")
+                    .on("click", function(d) {
+                        d3.select("#testing").text("Annotation 1 selected!");
+                    });
+            }
+            var anno_check = input_data.filter(function(d) { return d.date_completed == anno_values[1][0] && d.primary_runtime == anno_values[1][1]; });
+            if (anno_check.length != 0) {
+                var anno_point = d3.annotation()
+                    .type(elbow_callout)
+                    .annotations([{
+                        note: {
+                            label: "Selected point",
+                            title: "Point 2"
+                        },
+                        data: {
+                            date_completed: anno_values[1][0],
+                            primary_runtime: anno_values[1][1]
+                        },
+                        dx: 50,
+                        dy: -25
+                    }])
+                    .accessors({
+                        x: d => x_scale(d.date_completed),
+                        y: d => y_scale(d.primary_runtime)
+                    })
+                    .accessorsInverse({
+                        date: d => x_scale.invert(d.x),
+                        close: d => y_scale.invert(d.y)
+                    });
+                svg.append("g")
+                    .attr("transform", "translate("+margin.left+","+margin.top+")")
+                    .classed("botw-anno", true)
+                    .call(anno_point)
+                    .attr("opacity", "0")
+                    .on("click", function(d) {
+                        d3.select("#testing").text("Annotation 2 selected!");
+                    });
+            }
+            if (anno_values[2][0] >= input_dates[0] && anno_values[2][0] <= input_dates[1]) {
+                var anno_point = d3.annotation()
+                    .type(threshold_callout)
+                    .annotations([{
+                        note: {
+                            label: "Selected date",
+                            title: "Point 3"
+                        },
+                        data: {
+                            date_completed: anno_values[2][0],
+                            primary_runtime: anno_values[2][1]
+                        },
+                        dx: -100,
+                        dy: -25,
+                        subject: {
+                            y1: 0,
+                            y2: 0
+                        }
+                    }])
+                    .accessors({
+                        x: d => x_scale(d.date_completed),
+                        y: d => y_scale(d.primary_runtime)
+                    })
+                    .accessorsInverse({
+                        date: d => x_scale.invert(d.x),
+                        close: d => y_scale.invert(d.y)
+                    });
+                svg.append("g")
+                    .attr("transform", "translate("+margin.left+","+margin.top+")")
+                    .classed("botw-anno", true)
+                    .call(anno_point)
+                    .attr("opacity", "0")
+                    .on("click", function(d) {
+                        d3.select("#testing").text("Annotation 3 selected!");
+                    });
+            }
+            d3.select("svg").selectAll(".botw-anno")
+                .transition()
+                .delay(500)
+                .duration(1000)
+                .attr("opacity", "1");
+        }
+        function totk_chart(input_data) {
+            // Almost mirror image of botw_chart function.
+            // Clear svg of all elements.
+            var svg = d3.select("svg");
+            svg.selectAll("*").remove();
+
+            // Set the x-axis scale.
+            var input_dates = d3.extent(input_data, d => d.date_completed);
+            var date_format = [Excel_date(input_dates[0]), Excel_date(input_dates[1])];
+            var x_scale = d3.scaleLinear()
+                .domain(input_dates)
+                .range([0, width]);
+            var x_axis_scale = d3.scaleTime()
+                .domain(date_format)
+                .range([0, 1]);
+            
+            // Define the x-axis.
+            var x_axis = d3.axisBottom(x_axis_scale)
+                .tickFormat(d3.timeFormat("%b-%d-%Y"))
+                .ticks(15);
+            svg.append("g")
+                .attr("id", "x-axis")
+                .attr("transform", "translate("+margin.left+","+(svg_height - margin.bottom)+")")
+                .call(x_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-0.8em")
+                .attr("dy", ".15em")
+                .style("font-size", "12")
+                .attr("transform", "rotate(-55)");
+            x_axis_scale.range([0, width]);
+            svg.select("#x-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(x_axis);
+            
+            // Set the y-axis scale.
+            var input_times = d3.extent(input_data, d => d.primary_runtime);
+            var y_scale = d3.scaleLog()
+                .domain(input_times)
+                .range([height, height - 1]);
+            
+            // Define the y-axis.
+            var y_axis = d3.axisLeft(y_scale)
+                .tickFormat(d3.format(",.2r"));
+            svg.append("g")
+                .attr("id", "y-axis")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .call(y_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("font-size", "11.5");
+            y_scale.range([height, 0]);
+            svg.select("#y-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(y_axis);
+
+            // Define the x&y-axis labels.
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", margin.left + (width / 2))
+                .attr("y", svg_height - (margin.bottom - 90))
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Date of Completed Speedrun");
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", -(margin.top + (height / 2)))
+                .attr("y", margin.left - 50)
+                .attr("transform", "rotate(-90)")
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Time to Completion (in Seconds)");
+            svg.selectAll(".axis-label")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .attr("opacity", "1");
+            
+            // Define the tooltip and associated functions.
+            var tooltip = d3.select("#tooltip-div");
+            tooltip.style("opacity", 0)
+                .style("position", "absolute")
+                .style("background-color", "white")
+                .style("border", "solid")
+                .style("border-width", "1px")
+                .style("border-radius", "5px")
+                .style("padding", "10px");
+            var mouseover = function(d) {
+                var selected_date = Excel_date(d.date_completed).toLocaleDateString("en-US", {year: 'numeric', month: 'short', day: 'numeric'});
+                tooltip.style("opacity", 1)
+                    .html("Verified run completed in:<br>" + Excel_time(d.primary_runtime) + " on " + selected_date)
+                    .style("left", (d3.mouse(this)[0] + margin.left + 20) + "px")
+                    .style("top", (d3.mouse(this)[1] + margin.top - 20) + "px");
+                d3.select(this)
+                    .style("fill", d3.color("gold"))
+                    .style("stroke", d3.color("black"));
+            }
+            var mouseleave = function(d) {
+                tooltip.style("opacity", 0)
+                    .html("")
+                    .style("left", "auto")
+                    .style("top", "auto");
+                d3.select(this)
+                    .style("fill", d3.color("lightcoral"))
+                    .style("stroke", d3.color("maroon"));
+            }
+            
+            // Define the points.
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .selectAll().data(input_data)
+                .enter().append("circle")
+                .classed("totk-points", true)
+                .attr("cx", 0)
+                .attr("cy", height)
+                .attr("r", 5)
+                .style("fill", d3.color("lightcoral"))
+                .style("stroke", d3.color("maroon"))
+                .on("mouseover", mouseover)
+                .on("mousemove", mouseover)
+                .on("mouseleave", mouseleave);
+            svg.selectAll(".totk-points")
+                .transition()
+                .delay(100)
+                .duration(1000)
+                .attr("cx", function(d, i) { return x_scale(d.date_completed); })
+                .attr("cy", function(d, i) { return y_scale(d.primary_runtime); });
+        }
+        
+        const trends = await d3.csv("https://raw.githubusercontent.com/bowenbs7/narrativeviz-cs416/main/Trendlines.csv");
+        function both_chart(input_data) {
+            // Clear svg of all elements.
+            var svg = d3.select("svg");
+            svg.selectAll("*").remove();
+
+            var totk_data = filter_data(true, "totk", 3);
+            var botw_data = filter_data(true, "botw", 3);
+
+            // Set the x-axis scale.
+            var x_scale = d3.scaleLinear()
+                .domain([0, 2340])
+                .range([0, 1]);
+            
+            // Define the x-axis.
+            var x_axis = d3.axisBottom(x_scale);
+            svg.append("g")
+                .attr("id", "x-axis")
+                .attr("transform", "translate("+margin.left+","+(svg_height - margin.bottom)+")")
+                .call(x_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-0.8em")
+                .attr("dy", ".15em")
+                .style("font-size", "12")
+                .attr("transform", "rotate(-55)");
+            x_scale.range([0, width]);
+            svg.select("#x-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(x_axis);
+            
+            // Set the y-axis scale.
+            var input_times = d3.extent(botw_data, d => d.primary_runtime);
+            var y_scale = d3.scaleLog()
+                .domain(input_times)
+                .range([height, height - 1]);
+            
+            // Define the y-axis.
+            var y_axis = d3.axisLeft(y_scale)
+                .tickFormat(d3.format(",.2r"));
+            svg.append("g")
+                .attr("id", "y-axis")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .call(y_axis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("font-size", "11.5");
+            y_scale.range([height, 0]);
+            svg.select("#y-axis")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .call(y_axis);
+            
+            // Define the x&y-axis labels.
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", margin.left + (width / 2))
+                .attr("y", svg_height - (margin.bottom - 60))
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Days since Game Release");
+            svg.append("text")
+                .classed("axis-label", true)
+                .attr("text-anchor", "middle")
+                .attr("x", -(margin.top + (height / 2)))
+                .attr("y", margin.left - 50)
+                .attr("transform", "rotate(-90)")
+                .style("font-size", "16")
+                .attr("opacity", "0")
+                .text("Time to Completion (Seconds)");
+            svg.selectAll(".axis-label")
+                .transition()
+                .delay(50)
+                .duration(500)
+                .attr("opacity", "1");
+            
+            // Define the tooltip and associated functions.
+            var tooltip = d3.select("#tooltip-div");
+            tooltip.style("opacity", 0)
+                .style("position", "absolute")
+                .style("background-color", "white")
+                .style("border", "solid")
+                .style("border-width", "1px")
+                .style("border-radius", "5px")
+                .style("padding", "10px");
+            var botw_mouseover = function(d) {
+                var selected_date = Excel_date(d.date_completed).toLocaleDateString("en-US", {year: 'numeric', month: 'short', day: 'numeric'});
+                tooltip.style("opacity", 1)
+                    .html("Breath of the Wild speedrun completed in:<br>" + Excel_time(d.primary_runtime) + " on " + selected_date)
+                    .style("left", (d3.mouse(this)[0] + margin.left + 20) + "px")
+                    .style("top", (d3.mouse(this)[1] + margin.top - 20) + "px");
+                d3.select(this)
+                    .style("fill", d3.color("gold"))
+                    .style("stroke", d3.color("black"));
+            }
+            var botw_mouseleave = function(d) {
+                tooltip.style("opacity", 0)
+                    .html("")
+                    .style("left", "auto")
+                    .style("top", "auto");
+                d3.select(this)
+                    .style("fill", d3.color("lightblue"))
+                    .style("stroke", d3.color("darkcyan"));
+            }
+            var totk_mouseover = function(d) {
+                var selected_date = Excel_date(d.date_completed).toLocaleDateString("en-US", {year: 'numeric', month: 'short', day: 'numeric'});
+                tooltip.style("opacity", 1)
+                    .html("Tears of the Kingdom speedrun completed in:<br>" + Excel_time(d.primary_runtime) + " on " + selected_date)
+                    .style("left", (d3.mouse(this)[0] + margin.left + 20) + "px")
+                    .style("top", (d3.mouse(this)[1] + margin.top - 20) + "px");
+                d3.select(this)
+                    .style("fill", d3.color("gold"))
+                    .style("stroke", d3.color("black"));
+            }
+            var totk_mouseleave = function(d) {
+                tooltip.style("opacity", 0)
+                    .html("")
+                    .style("left", "auto")
+                    .style("top", "auto");
+                d3.select(this)
+                    .style("fill", d3.color("lightcoral"))
+                    .style("stroke", d3.color("maroon"));
+            }
+            
+            // Define the points and trend lines.
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .selectAll().data(totk_data)
+                .enter().append("circle")
+                .classed("totk-points", true)
+                .attr("cx", 0)
+                .attr("cy", height)
+                .attr("r", 5)
+                .style("fill", d3.color("lightcoral"))
+                .style("stroke", d3.color("maroon"))
+                .on("mouseover", totk_mouseover)
+                .on("mousemove", totk_mouseover)
+                .on("mouseleave", totk_mouseleave);
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .append("path")
+                .datum(trends)
+                .attr("id", "totk-trend")
+                .attr("fill", "none")
+                .attr("stroke", "crimson")
+                .attr("stroke-width", 3)
+                .attr("opacity", "0")
+                .attr("d", d3.line()
+                    .x(function(d) { return x_scale(d.value); })
+                    .y(function(d) { return y_scale(d.totk_trend); }));
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .selectAll().data(botw_data)
+                .enter().append("circle")
+                .classed("botw-points", true)
+                .attr("cx", 0)
+                .attr("cy", height)
+                .attr("r", 5)
+                .style("fill", d3.color("lightblue"))
+                .style("stroke", d3.color("darkcyan"))
+                .on("mouseover", botw_mouseover)
+                .on("mousemove", botw_mouseover)
+                .on("mouseleave", botw_mouseleave);
+            svg.append("g")
+                .attr("transform", "translate("+margin.left+","+margin.top+")")
+                .append("path")
+                .datum(trends)
+                .attr("id", "botw-trend")
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 3)
+                .attr("opacity", "0")
+                .attr("d", d3.line()
+                    .x(function(d) { return x_scale(d.value); })
+                    .y(function(d) { return y_scale(d.botw_trend); }));
+            svg.selectAll(".botw-points")
+                .transition()
+                .delay(100)
+                .duration(1000)
+                .attr("cx", function(d, i) { return x_scale(d.time_since_release); })
+                .attr("cy", function(d, i) { return y_scale(d.primary_runtime); });
+            svg.selectAll(".totk-points")
+                .transition()
+                .delay(500)
+                .duration(1000)
+                .attr("cx", function(d, i) { return x_scale(d.time_since_release); })
+                .attr("cy", function(d, i) { return y_scale(d.primary_runtime); });
+            d3.select("svg").selectAll("#botw-trend")
+                .transition()
+                .delay(1000)
+                .duration(1000)
+                .attr("opacity", "1");
+            d3.select("svg").selectAll("#totk-trend")
+                .transition()
+                .delay(1500)
+                .duration(1000)
+                .attr("opacity", "1");
+        }
+
+        button_check();
+        filter_settings(slide);
+        botw_chart(filter_data(true, "botw", slide));
+        d3.select("#filter").on("click", function() { filter_chart(slide); });
+        d3.select("#reset").on("click", function() { reset_filters(slide); });
+        d3.select("#previous").on("click", previous_slide);
+        d3.select("#next").on("click", next_slide);
+    }
+</script>
+
+</body>
+</html>
